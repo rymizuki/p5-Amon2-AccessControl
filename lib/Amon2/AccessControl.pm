@@ -5,6 +5,63 @@ use warnings;
 
 our $VERSION = "0.01";
 
+use Mouse::Util ();
+use Mouse;
+
+has 'namespace' => (
+    is      => 'ro',
+    isa     => 'Str',
+    default => __PACKAGE__ . '::Role',
+);
+
+has [qw(_success _fail)] => (
+    is       => 'ro',
+    isa      => 'Bool',
+    required => 0,
+);
+
+has 'response' => (
+    is       => 'rw',
+    isa      => 'Plack::Response',
+    required => 0,
+);
+
+no Mouse;
+
+sub with {
+    my ($self, $role) = @_;
+
+    $role = ref $role ? $role : Mouse::Util::load_first_existing_class(
+        $self->namespace.'::'.$role, $role
+    );
+
+    Mouse::Util::apply_all_roles($self, $role);
+
+    return $self;
+}
+
+sub authenticate {
+    my ($self, $c, $option) = @_;
+
+    if ($option->{authenticate}) {
+        my $response = $option->{authenticate}->($self, $c, $option);
+        $self->response( $response ) if $response && $response->isa('Plack::Response');
+    }
+
+    return $self;
+}
+
+sub success { shift->{_success} = 1 }
+sub failed  { shift->{_fail}    = 1 }
+
+sub is_passed  {
+    my $self = shift;
+
+    return $self->_success ? 1
+         : $self->_fail    ? 0
+         : Carp::croak('must be called to $auth->fail or $auth->success in authenticate.');
+}
+
 
 
 1;
